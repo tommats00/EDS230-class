@@ -47,7 +47,7 @@ Modularity! (Functions)
 
 The basic building blocks of models
 
-Functions are the “boxes” of the model
+Functions are the "boxes" of the model
 
 -   the transfer function that takes inputs and returns outputs
 -   most languages have a function library (e.g. R, Python, C++)
@@ -73,7 +73,7 @@ Data types, units (time and space aggregation), names should be (use descriptive
 
 Place each function in its own file (x.R), and put all functions for a given project in *R* subdirectory
 
-# What’s in the box
+# What's in the box
 
 Often more complicated than a simple single equation (regression results)
 
@@ -87,7 +87,7 @@ Diagrams are a good place to start
 
 -   Big chunks (coarse detail) -\> progressively finer
 
--   Note ‘tasks’ that need to be repeated
+-   Note 'tasks' that need to be repeated
 
 -   All tasks should have inputs and outputs
 
@@ -455,9 +455,9 @@ The Lobell et al. 2006 paper will be the source for the transfer function that y
 
 Here are some ideas to think though. The climate data is going to need to be processed (e.g note that the model uses climate data from a particular month - you have ALL of the climate as daily data). Here are two possible model outlines to follow
 
-● Almond_model \<- function(clim_var1, clim_var2, parameters){……}
+● Almond_model \<- function(clim_var1, clim_var2, parameters){......}
 
-● Almond_model \<- function(clim, parameters){……}
+● Almond_model \<- function(clim, parameters){......}
 
 The first example is where the climate variables are separately input into the function - climate data is processed beforehand as part of model set up
 
