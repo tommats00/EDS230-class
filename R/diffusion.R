@@ -39,3 +39,4 @@ diff1 <- function(initialC, nx, dx, nt, dt, D, area) {
 
   return(list(conc = conc, qout = qout, qin = qin))
 }
+
