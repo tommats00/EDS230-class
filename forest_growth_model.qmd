@@ -1,0 +1,252 @@
+---
+title: "Forest Growth Model"
+author: "Tom Gibbens-Matsuyama"
+format: html
+editor: visual
+---
+
+### Task 
+
+1. Implement the model in R as a differential equation
+
+2. Run the model for 300 years (using the ODE solver) starting with an initial forest size of 10 kg/C and the following parameters
+
+- canopy closure threshold of 50 kgC
+- K = 250 kg C
+- r = 0.01
+- g = 2 kg/year 
+
+3. Graph the results
+
+4. Run a sobol global sensitivity analysis that explores how the estimated maximum forest size (i.e. max of C 300 years, vaires with these parameters)
+
+- pre canopy closure growth rate (r)
+- post-canopy closure growth rate (g)
+canopy closure threshold and carrying capacity (K)
+
+Assume that paramters are all normally distributed with means as given above and std deviation of 10% of mean value
+
+5. Graph the results of the sensitivity analysis as a box plot of max forest size and record the two Sobol Indices (S and T)
+
+6. In 2-3 sentences, discuss what the results mean. How do the parameters influence climate change. 
+
+### Load libraries
+```{r}
+library(tidyverse)
+library(deSolve)
+library(sensitivity)
+library(here)
+```
+
+
+# 2. Run the model with the parameters above
+```{r}
+source(here("R", "forest_growth.R"))
+
+# We know initial Forest size C
+Cinitial <- 10
+
+simtimes <- seq(from = 1, to = 300)
+
+parms <- list(r = 0.01, K = 250, g = 2, thresh = 50)
+
+results <- ode(y = Cinitial, times = simtimes, func = forest_growth, parms = parms)
+
+colnames(results) <- c("time", "C")
+```
+
+### 3. Graph the results
+```{r}
+results <- as.data.frame(results)
+ggplot(results, aes(time, C)) +
+  geom_point()
+
+```
+
+### 4. Run a sobol sensitivity analysis
+We will vary the parameters, r, g, and K, assuming a normal distribution with a 10% standard deviation
+```{r}
+# Set sample size
+np <- 1000
+
+# Generate normal distributions for parameters
+K <- rnorm(mean = 250, sd = 25, n = np)
+r <- rnorm(mean = 0.01, sd = 0.001, n = np)
+g <- rnorm(mean = 2, sd = 0.2, n = np)
+thresh <- 50 
+X1 <- cbind.data.frame(r = r, K = K, g = g, thresh = thresh)
+
+# Generate second set of samples
+K <- rnorm(mean = 250, sd = 25, n = np)
+r <- rnorm(mean = 0.01, sd = 0.001, n = np)
+g <- rnorm(mean = 2, sd = 0.2, n = np)
+thresh <- 50
+X2 <- cbind.data.frame(r = r, K = K, g = g, thresh = thresh)
+
+# fix any negative values and they are not meaningful
+X1 <- X1 %>% map_df(pmax, 0.0)
+X2 <- X2 %>% map_df(pmax, 0.0)
+
+# create our sobel object and get sets of parameters for running the model
+sens_C <- sobolSalt(model = NULL, X1, X2, nboot = 300)
+
+# View head
+head(sens_C$X)
+
+# lets add names
+colnames(sens_C$X) <- c("r", "K", "g", "thresh")
+
+# View head
+head(sens_C$X)
+```
+
+
+
+```{r}
+# gets results for 200 years (evaluating every year)
+simtimes <- seq(from = 1, to = 300)
+parms <- list(r = sens_C$X[1,"r"], K = sens_C$X[1,"K"], g = sens_C$X[1,"g"], thresh = sens_C$X[1,"thresh"])
+
+# or
+# parms <- list(r = as.data.frame(sens_C$X)$r[1], K = as.data.frame(sens_C$X)$K[1], 
+#               g = as.data.frame(sens_C$X)$g[1], as.data.frame(sens_C$X)$)
+
+result <- ode(y = Cinitial, times = simtimes, func = forest_growth, parms = parms)
+
+head(result)
+colnames(result) <- c("time", "C")
+# turn it into a data frame
+result <- as.data.frame(result)
+ggplot(result, aes(time, C)) +
+  geom_point()
+```
+
+
+```{r}
+# Extract metrics of interest
+maxsize <- max(result$C)
+maxsize
+
+# Years required to get to a threshold of size 50
+thresh <- 50
+idx <- which(result$C > thresh)[1]
+
+# if it never gets there
+idx <- ifelse(is.na(idx), length(result$C), idx)
+
+threshyear <- result$time[idx]
+threshyear
+
+ggplot(result, aes(time, C)) +
+  geom_line() +
+  geom_vline(xintercept = threshyear, col = "red") +
+  labs(y = "Size", title = "When do we get to 50")
+
+# 50% of carrying capacity
+thresh <- 0.5 *sens_C$X[1, "K"]
+idx <-which(result$C > thresh)[1]
+
+# if it never gets there
+idx <- ifelse(is.na(idx), length(result$C), idx)
+# turn this index into a year (might be the same if time step in 1 but just in case it isn't)
+threshyear <- result$time[idx]
+threshyear
+
+ggplot(result, aes(time, C)) +
+  geom_line() +
+  geom_vline(xintercept = threshyear, col = "red") +
+  labs(y = "Size", title = "When do we get to 50%\nof carrying capacity")
+```
+
+
+# Compute metrics and wrapper function
+```{r}
+
+# turn computing our metrics into a function
+
+compute_metrics <- function(result, thresh) {
+  maxsize <- max(result$C)
+  idx <- which(result$C > thresh)[1]
+  idx <- ifelse(is.na(idx), length(result$C), idx)
+  threshyear <- result$time[idx]
+  return(list(maxsize = maxsize, threshyear = threshyear))
+}
+
+# try it on our first parameter set, and look at when it gets to 100
+compute_metrics(result, 50)
+
+
+
+# great but we need to apply the ode and this function for all of our parameters
+
+# define a wrapper function to do everything we need - run solver and compute metrics - and send back results for each parameter
+
+# lets make the threshold 90% of carrying capacity
+
+p_wrapper <- function(r, K, g, thresh, Cinitial, simtimes, odefunc, metricfunc) {
+  parms <- list(r = r, K = K, g = g, thresh = thresh)
+  result <- ode(y = Cinitial, times = simtimes, func = odefunc, parms = parms, method="euler")
+  colnames(result) <- c("time", "C")
+  # get metrics
+  metrics <- metricfunc(as.data.frame(result), thresh = 50)
+  return(metrics)
+}
+
+# test
+p_wrapper(
+  r = 0.01, K = 250, Cinitial = 10, simtimes = seq(from = 1, to = 300),
+  odefunc = forest_growth, metricfunc = compute_metrics, g = 2, thresh = 50
+)
+```
+
+Run the wrapper for all parameters and look at results
+
+
+```{r userwarpper}
+# now use pmap as we did before
+
+allresults <- as.data.frame(sens_C$X) %>% 
+  pmap(p_wrapper, Cinitial = Cinitial, 
+       simtimes = simtimes, 
+       odefunc = forest_growth, 
+       metricfunc = compute_metrics)
+
+# extract out results from pmap into a data frame
+allres <- allresults %>% map_dfr(`[`, c("maxsize", "threshyear"))
+
+
+# create boxplots
+tmp <- allres %>% pivot_longer(cols = everything(), names_to = "metric", values_to = "value")
+ggplot(tmp, aes(metric, value, col = metric)) +
+  geom_boxplot()
+```
+
+# Compute the sobol indicies for each metric
+
+```{r sen3}
+# sobol can only handle one output at a time  - so we will need to do them separately
+
+sens_C_maxsize <- sensitivity::tell(sens_C, allres$maxsize)
+
+# first-order indices (main effect without co-variance)
+rownames(sens_C_maxsize$S) <- c("r", "K", "g", "thresh")
+sens_C_maxsize$S
+
+# total sensitivity index -note that this partitions the output variance
+rownames(sens_C_maxsize$T) <- c("r", "K", "g", "thresh")
+sens_C_maxsize$T
+
+
+
+
+# create another one for max year
+sens_C_threshyear <- sensitivity::tell(sens_C, allres$threshyear)
+# first-order indices (main effect without co-variance)
+rownames(sens_C_threshyear$S) <- c("r", "K", "g", "thresh")
+sens_C_threshyear$S
+
+# total sensitivity index -note that this partitions the output variance - so values sum to 1
+rownames(sens_C_threshyear$T) <- c("r", "K", "g", "thresh")
+sens_C_threshyear$T
+
+```
