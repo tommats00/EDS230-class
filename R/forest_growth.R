@@ -3,6 +3,7 @@
 #' @param C size of the forest in kg/C
 #' @param g linear growth rate in kg/year
 #' @param K carrying capacity in units kg carbon
+#' @param thresh canopy closure threshold
 
 
 forest_growth <- function (time, C, parms){

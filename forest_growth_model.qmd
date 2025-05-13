@@ -3,6 +3,9 @@ title: "Forest Growth Model"
 author: "Tom Gibbens-Matsuyama"
 format: html
 editor: visual
+execute: 
+  message: false
+  warning: false
 ---
 
 ### Task 
@@ -38,8 +41,10 @@ library(sensitivity)
 library(here)
 ```
 
+### 1. Implement model
+Model was created in the forest_growth.R file. 
 
-# 2. Run the model with the parameters above
+### 2. Run the model with the parameters above
 ```{r}
 source(here("R", "forest_growth.R"))
 
@@ -107,10 +112,6 @@ head(sens_C$X)
 simtimes <- seq(from = 1, to = 300)
 parms <- list(r = sens_C$X[1,"r"], K = sens_C$X[1,"K"], g = sens_C$X[1,"g"], thresh = sens_C$X[1,"thresh"])
 
-# or
-# parms <- list(r = as.data.frame(sens_C$X)$r[1], K = as.data.frame(sens_C$X)$K[1], 
-#               g = as.data.frame(sens_C$X)$g[1], as.data.frame(sens_C$X)$)
-
 result <- ode(y = Cinitial, times = simtimes, func = forest_growth, parms = parms)
 
 head(result)
@@ -118,115 +119,76 @@ colnames(result) <- c("time", "C")
 # turn it into a data frame
 result <- as.data.frame(result)
 ggplot(result, aes(time, C)) +
-  geom_point()
+  geom_point() +
+  labs(x = "time",
+       y = "Forest Size",
+       title = "Forest size over time") +
+  theme_minimal()
 ```
+This is still creating a graph for just one simulation as we indexed for the first row in our data. Let's create a max size function and a wrapper function that can be used for all parameters. 
 
-
+### Compute metrics and wrapper function
 ```{r}
-# Extract metrics of interest
-maxsize <- max(result$C)
-maxsize
-
-# Years required to get to a threshold of size 50
-thresh <- 50
-idx <- which(result$C > thresh)[1]
-
-# if it never gets there
-idx <- ifelse(is.na(idx), length(result$C), idx)
-
-threshyear <- result$time[idx]
-threshyear
-
-ggplot(result, aes(time, C)) +
-  geom_line() +
-  geom_vline(xintercept = threshyear, col = "red") +
-  labs(y = "Size", title = "When do we get to 50")
-
-# 50% of carrying capacity
-thresh <- 0.5 *sens_C$X[1, "K"]
-idx <-which(result$C > thresh)[1]
-
-# if it never gets there
-idx <- ifelse(is.na(idx), length(result$C), idx)
-# turn this index into a year (might be the same if time step in 1 but just in case it isn't)
-threshyear <- result$time[idx]
-threshyear
-
-ggplot(result, aes(time, C)) +
-  geom_line() +
-  geom_vline(xintercept = threshyear, col = "red") +
-  labs(y = "Size", title = "When do we get to 50%\nof carrying capacity")
-```
-
-
-# Compute metrics and wrapper function
-```{r}
-
-# turn computing our metrics into a function
-
-compute_metrics <- function(result, thresh) {
-  maxsize <- max(result$C)
-  idx <- which(result$C > thresh)[1]
-  idx <- ifelse(is.na(idx), length(result$C), idx)
-  threshyear <- result$time[idx]
-  return(list(maxsize = maxsize, threshyear = threshyear))
+# Create max size function
+max_c <- function(result){
+  
+  max_c <- max(result$C)
+  
+  return(list(max_c))
+  
 }
 
-# try it on our first parameter set, and look at when it gets to 100
-compute_metrics(result, 50)
-
-
-
-# great but we need to apply the ode and this function for all of our parameters
-
-# define a wrapper function to do everything we need - run solver and compute metrics - and send back results for each parameter
-
-# lets make the threshold 90% of carrying capacity
-
-p_wrapper <- function(r, K, g, thresh, Cinitial, simtimes, odefunc, metricfunc) {
-  parms <- list(r = r, K = K, g = g, thresh = thresh)
-  result <- ode(y = Cinitial, times = simtimes, func = odefunc, parms = parms, method="euler")
-  colnames(result) <- c("time", "C")
-  # get metrics
-  metrics <- metricfunc(as.data.frame(result), thresh = 50)
-  return(metrics)
+# Wrapper function
+wrapper <- function(K, g, r, thresh, Cinitial, simtimes, forest_growth_func, max_c_func) {
+    parms <- list(r = r, K = K, g = g, thresh = thresh)
+    result <- ode(y = Cinitial, times = simtimes, func = forest_growth_func, parms = parms, method="euler")
+    colnames(result) <- c("time", "C")
+    
+    # get metrics
+    metrics <- max_c_func(as.data.frame(result))
+    return(metrics)
 }
 
 # test
-p_wrapper(
+wrapper(
   r = 0.01, K = 250, Cinitial = 10, simtimes = seq(from = 1, to = 300),
-  odefunc = forest_growth, metricfunc = compute_metrics, g = 2, thresh = 50
+  forest_growth_func = forest_growth, max_c_func = max_c, g = 2, thresh = 50
 )
 ```
-
+### 5. Graph the results
 Run the wrapper for all parameters and look at results
 
 
 ```{r userwarpper}
+
 # now use pmap as we did before
 
 allresults <- as.data.frame(sens_C$X) %>% 
-  pmap(p_wrapper, Cinitial = Cinitial, 
+  pmap(wrapper, Cinitial = Cinitial, 
        simtimes = simtimes, 
-       odefunc = forest_growth, 
-       metricfunc = compute_metrics)
+       forest_growth_func = forest_growth, 
+       max_c_func = max_c)
 
 # extract out results from pmap into a data frame
-allres <- allresults %>% map_dfr(`[`, c("maxsize", "threshyear"))
+allres <- allresults %>% map_dfr(~ tibble(max_c = .x[[1]]))
 
 
 # create boxplots
-tmp <- allres %>% pivot_longer(cols = everything(), names_to = "metric", values_to = "value")
-ggplot(tmp, aes(metric, value, col = metric)) +
-  geom_boxplot()
+tmp <- allres %>% pivot_longer(cols = everything(), names_to = "max_forest", values_to = "value")
+ggplot(tmp, aes(max_forest, value)) +
+  geom_boxplot() +
+  labs(title = "Max Forest Size Sensitivity Analysis",
+       y = "Max Forest Size (C)") +
+  scale_y_continuous() +
+  theme_minimal()
 ```
 
-# Compute the sobol indicies for each metric
+### Compute the sobol indicies for each metric
 
 ```{r sen3}
 # sobol can only handle one output at a time  - so we will need to do them separately
 
-sens_C_maxsize <- sensitivity::tell(sens_C, allres$maxsize)
+sens_C_maxsize <- sensitivity::tell(sens_C, allres$max_c)
 
 # first-order indices (main effect without co-variance)
 rownames(sens_C_maxsize$S) <- c("r", "K", "g", "thresh")
@@ -236,17 +198,8 @@ sens_C_maxsize$S
 rownames(sens_C_maxsize$T) <- c("r", "K", "g", "thresh")
 sens_C_maxsize$T
 
-
-
-
-# create another one for max year
-sens_C_threshyear <- sensitivity::tell(sens_C, allres$threshyear)
-# first-order indices (main effect without co-variance)
-rownames(sens_C_threshyear$S) <- c("r", "K", "g", "thresh")
-sens_C_threshyear$S
-
-# total sensitivity index -note that this partitions the output variance - so values sum to 1
-rownames(sens_C_threshyear$T) <- c("r", "K", "g", "thresh")
-sens_C_threshyear$T
-
 ```
+
+
+### 6. Conclusion
+From the sensitivity analysis, we see that r (exponential growth rate) and K (carrying capacity) have the most influence on max forest size. Climate change can have a direct impact on both growth rates. For example, increases in drought may cause a decrease in growth rate due to less water availability. 
