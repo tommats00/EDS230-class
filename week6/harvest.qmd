@@ -18,16 +18,17 @@ Generate and run a model of harvest
 # fixed amount per year
 source(here("R/dharvest.R"))
 dharvest
+source(here("R/dharvestfixed.R"))
 
 # try it out
-tm <- seq(from = 1, to = 500)
-Pinitial <- 1
-gps <- list(harv = 0.18, K = 100, r = 0.2)
-res <- ode(Pinitial, tm, dharvest, gps)
+tm <- seq(from = 1, to = 100)
+Pinitial <- 200
+gps <- list(harv = 0.04, K = 1000, r = 0.05, mincarbon = 20)
+res <- ode(Pinitial, tm, dharvest, gps, method = "euler")
 colnames(res) <- c("time", "carbon")
 
 ggplot(as.data.frame(res), aes(time, carbon)) +
-  geom_point()
+  geom_line()
 
 # what if we harvest a a much greater rates
 
