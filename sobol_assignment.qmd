@@ -3,14 +3,40 @@ title: "Assignment 4: Sobol Analysis"
 author: "Tom Gibbens-Matsuyama"
 format: html
 editor: visual
+editor_options: 
+  chunk_output_type: console
+execute: 
+  warning: false
+  message: false
 ---
 
 ### Goal
-The goal of this assignment is to repeat the Sobol analysis we did in class, but we are assuming a different location with substantially higher windspeeds and shorter vegetation. 
+
+The goal of this assignment is to repeat the Sobol analysis we did in class, but we are assuming a different location with substantially higher wind speeds and shorter vegetation.
+
+#### Load Libraries
+
+```{r}
+library(sensitivity)
+library(tidyverse)
+library(gridExtra)
+library(purrr)
+library(ggpubr)
+library(here)
+```
 
 ### Generate new parameter values
 
-a. Use the Sobel approach to generate parameter values for the 4 parameters
+a.  Use the Sobol approach to generate parameter values for the 4 parameters
+
+Parameters:
+
+-   Windspeed v is normally distributed with a mean of 300 cm/s and std dev. 50 cm/s
+
+-   Vegetation height is uniformly distributed between 3.5 and 5.5 m
+
+-   kd and k0 are normally distribtued with std. dev. of 1% of their defaults
+
 ```{r}
 source(here("R/Catm.R"))
 
@@ -41,9 +67,10 @@ sens_Catm_Sobol <- sobolSalt(model = NULL, X1, X2, nboot = 100)
 # your parameters sets for sensitivity analysis are in X
 ```
 
-### Run the atmosphereric conductance model 
+### Run the atmosphereric conductance model
 
-b. Run the atmospheric conductance model for these parameters
+b.  Run the atmospheric conductance model for these parameters Now that we have generated the parameter values, let's run our sensitivity model using the `sensitivity` library.
+
 ```{r}
 # run model for all parameter sets
 # make sure you give the parameters names
@@ -70,13 +97,12 @@ sens_Catm_Sobol$T
 
 print(sens_Catm_Sobol)
 ```
-e.  Estimate the Sobel Indices for your outut
-We answered this already with the table output. It quanitifies how much each input parameter contributes to the variance in the model's output. 
 
+e.  Estimate the Sobol Indices for your output From the outputs, we see that windspeed and height have more influence on conductance. Let's plot so we can visually see this.
 
 ### Plot the estimates in a way that accounts for parameter uncertainty
 
-d. Plot conductance estimates against windspeed use the parameter that is 2nd in terms of total effect on response. From the table we created, windspeed (v) is the dominant variable affecting the model and height is the second most influential variable. 
+d.  Plot conductance estimates against windspeed use the parameter that is 2nd in terms of total effect on response. From the table we created, windspeed (v) is the dominant variable affecting the model and height is the second most influential variable.
 
 ```{r}
 # graph two most sensitive parameters
@@ -102,6 +128,9 @@ ggplot(both, aes(k_o, gs, col = k_d)) +
   geom_point() +
   labs(y = "Conductance (mm/s)", x = "k_d parameter")
 ```
-f. Comment on what this tells you about how atmospheric conductance and its sensitivity to variation in windspped differs in this setting as compared to the setting that we examined in class where windspeed was lower and less variable and vegetation was taller.
 
-With this model, where the height of the vegetation is much lower and the windspeed values and spread are greater, we see a much greater influence of the two parameters on atmospheric conductance. There is a linear relationship between windspeed and height to atmospheric conductance. 
+### Conclusion
+
+Comment on what this tells you about how atmospheric conductance and its sensitivity to variation in windspped differs in this setting as compared to the setting that we examined in class where windspeed was lower and less variable and vegetation was taller.
+
+With this model, where the height of the vegetation is much lower and the windspeed values and spread are greater, we see a much greater influence of the two parameters on atmospheric conductance. Windspeed has the most influence on atmospheric conductance, with height as a secondary influence. The two of these variables make up a linear relationship with conductance under the defined parameter values.
