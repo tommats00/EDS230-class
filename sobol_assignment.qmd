@@ -8,6 +8,7 @@ editor_options:
 execute: 
   warning: false
   message: false
+embed-resources: true
 ---
 
 ### Goal

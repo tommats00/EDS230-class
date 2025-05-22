@@ -6,6 +6,7 @@ editor: visual
 execute: 
   message: false
   warning: false
+embed-resources: true
 ---
 
 ### Task 
