@@ -95,7 +95,7 @@ lotvmodK
 currpop <- c(prey = 1, pred = 1)
 
 # set parameter list
-pars <- c(rprey = 0.1, alpha = 0.6, eff = 0.8, pmort = 0.4, K = 20)
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000)
 
 # times when you want to evaluate
 days <- seq(from = 1, to = 500)
